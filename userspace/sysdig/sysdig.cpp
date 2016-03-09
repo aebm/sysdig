@@ -159,6 +159,12 @@ static void usage()
 " -l, --list         List the fields that can be used for filtering and output\n"
 "                    formatting. Use -lv to get additional information for each\n"
 "                    field.\n"
+" -m <url[,marathon_url]>, --mesos-api=<url[,marathon_url]>\n"
+"                    Enable Mesos support by connecting to the API server\n"
+"                    specified as argument. E.g. \"http://admin:password@127.0.0.1:5050\".\n"
+"                    Marathon url is optional and defaults to Mesos address, port 8080.\n"
+"                    The API servers can also be specified via the environment variable\n"
+"                    SYSDIG_MESOS_API.\n"
 " -M <num_seconds>   Stop collecting after <num_seconds> reached.\n"
 " -N                 Don't convert port numbers to names.\n"
 " -n <num>, --numevents=<num>\n"
@@ -506,7 +512,7 @@ captureinfo do_inspect(sinsp* inspector,
 	sinsp_evt* ev;
 	string line;
 	double last_printed_progress_pct = 0;
-        int duration_start = 0;
+	int duration_start = 0;
 
 	if(json)
 	{
@@ -707,6 +713,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 	vector<summary_table_entry>* summary_table = NULL;
 	string* k8s_api = 0;
 	string* k8s_api_cert = 0;
+	string* mesos_api = 0;
 
 	// These variables are for the cycle_writer engine
 	int duration_seconds = 0;
@@ -739,6 +746,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 		{"k8s-api-cert", required_argument, 0, 'K' },
 		{"list", no_argument, 0, 'l' },
 		{"list-events", no_argument, 0, 'L' },
+		{"mesos-api", required_argument, 0, 'm'},
 		{"numevents", required_argument, 0, 'n' },
 		{"progress", required_argument, 0, 'P' },
 		{"print", required_argument, 0, 'p' },
@@ -777,7 +785,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
                                         "C:"
                                         "dDEe:F"
                                         "G:"
-                                        "hi:jk:K:lLM:Nn:Pp:qr:Ss:t:v"
+                                        "hi:jk:K:lLm:M:Nn:Pp:qr:Ss:t:v"
                                         "W:"
                                         "w:xXz", long_options, &long_index)) != -1)
 		{
@@ -936,6 +944,9 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 				list_events(inspector);
 				delete inspector;
 				return sysdig_init_res(EXIT_SUCCESS);
+			case 'm':
+				mesos_api = new string(optarg);
+				break;
 			case 'M':
 				duration_to_tot = atoi(optarg);
 				if(duration_to_tot <= 0)
@@ -1014,6 +1025,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 			case 'r':
 				infiles.push_back(optarg);
 				k8s_api = new string();
+				mesos_api = new string();
 				break;
 			case 'S':
 				summary_table = new vector<summary_table_entry>;
@@ -1311,7 +1323,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 
 					if(system("modprobe " PROBE_NAME " > /dev/null 2> /dev/null"))
 					{
-						fprintf(stderr, "Unable to load the driver\n");						
+						fprintf(stderr, "Unable to load the driver\n");
 					}
 
 					inspector->open("");
@@ -1387,9 +1399,27 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 				k8s_api_cert = 0;
 			}
 
+			//
+			// run mesos, if required
+			//
+			if(mesos_api)
+			{
+				inspector->init_mesos_client(mesos_api);
+			}
+			else if(char* mesos_api_env = getenv("SYSDIG_MESOS_API"))
+			{
+				if(mesos_api_env != NULL)
+				{
+					mesos_api = new string(mesos_api_env);
+					inspector->init_mesos_client(mesos_api);
+				}
+			}
+			delete mesos_api;
+			mesos_api = 0;
+
 			cinfo = do_inspect(inspector,
 				cnt,
-                                duration_to_tot,
+				duration_to_tot,
 				quiet,
 				jflag,
 				unbuf_flag,

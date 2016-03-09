@@ -20,6 +20,7 @@ const std::string mesos::default_marathon_uri = "http://localhost:8080";
 const std::string mesos::default_groups_api   = "/v2/groups";
 const std::string mesos::default_apps_api     = "/v2/apps?embed=apps.tasks";
 const std::string mesos::default_watch_api    = "/v2/events";
+const int mesos::default_timeout_ms           = 5000;
 
 mesos::mesos(const std::string& state_uri,
 	const std::string& state_api,
@@ -27,7 +28,8 @@ mesos::mesos(const std::string& state_uri,
 	const std::string& groups_api,
 	const std::string& apps_api,
 	bool discover_mesos_leader,
-	int timeout_ms):
+	int timeout_ms,
+	bool is_captured):
 #ifdef HAS_CAPTURE
 		m_collector(false),
 		m_mesos_uri(state_uri),
@@ -35,7 +37,8 @@ mesos::mesos(const std::string& state_uri,
 #endif // HAS_CAPTURE
 		m_creation_logged(false),
 		m_discover_mesos_leader(discover_mesos_leader),
-		m_timeout_ms(timeout_ms)
+		m_timeout_ms(timeout_ms),
+		m_is_captured(is_captured)
 {
 	g_logger.log(std::string("Creating Mesos object, failover autodiscovery set to ") +
 				 (m_discover_mesos_leader ? "true" : "false"),
@@ -46,51 +49,54 @@ mesos::mesos(const std::string& state_uri,
 void mesos::init()
 {
 #ifdef HAS_CAPTURE
-	m_collector.remove_all();
-	if(m_state_http)
+	if(!m_mesos_uri.empty())
 	{
-		if(m_mesos_uri.empty() && m_discover_mesos_leader)
+		m_collector.remove_all();
+		if(m_state_http)
 		{
-			const uri& url = m_state_http->get_url();
-			std::string scheme = url.get_scheme();
-			if(scheme == "https")
+			if(m_mesos_uri.empty() && m_discover_mesos_leader)
 			{
-				//TODO
-				throw sinsp_exception("Mesos error: https not supported.");
+				const uri& url = m_state_http->get_url();
+				std::string scheme = url.get_scheme();
+				if(scheme == "https")
+				{
+					//TODO
+					throw sinsp_exception("Mesos error: https not supported.");
+				}
+				std::string creds = url.get_credentials();
+				if(!creds.empty()) creds.append(1, '@');
+				m_mesos_uri = scheme + "://" + creds + url.get_host();
+				int port = url.get_port();
+				if(!port)
+				{
+					if(scheme == "http") port = 80;
+					else if(scheme == "https") port = 443;
+				}
+				m_mesos_uri.append(1, ':').append(std::to_string(port));
 			}
-			std::string creds = url.get_credentials();
-			if(!creds.empty()) creds.append(1, '@');
-			m_mesos_uri = scheme + "://" + creds + url.get_host();
-			int port = url.get_port();
-			if(!port)
+			if(!m_state_http.unique())
 			{
-				if(scheme == "http") port = 80;
-				else if(scheme == "https") port = 443;
+				throw sinsp_exception("Invalid access to Mesos initializer: mesos state http client for [" +
+									  m_mesos_uri + "] not unique.");
 			}
-			m_mesos_uri.append(1, ':').append(std::to_string(port));
 		}
-		if(!m_state_http.unique())
+
+		m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, m_timeout_ms);
+		rebuild_mesos_state(true);
+
+		m_marathon_groups_http.clear();
+		m_marathon_apps_http.clear();
+		const uri_list_t& marathons = m_marathon_uris.size() ? m_marathon_uris : m_state_http->get_marathon_uris();
+		for(const auto& muri : marathons)
 		{
-			throw sinsp_exception("Invalid access to Mesos initializer: mesos state http client for [" +
-								  m_mesos_uri + "] not unique.");
+			m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, m_timeout_ms);
+			m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, m_timeout_ms);
 		}
-	}
 
-	m_state_http = std::make_shared<mesos_http>(*this, m_mesos_uri + default_state_api, m_discover_mesos_leader, m_timeout_ms);
-	rebuild_mesos_state(true);
-
-	m_marathon_groups_http.clear();
-	m_marathon_apps_http.clear();
-	const uri_list_t& marathons = m_marathon_uris.size() ? m_marathon_uris : m_state_http->get_marathon_uris();
-	for(const auto& muri : marathons)
-	{
-		m_marathon_groups_http[muri] = std::make_shared<marathon_http>(*this, muri + default_groups_api, m_timeout_ms);
-		m_marathon_apps_http[muri]   = std::make_shared<marathon_http>(*this, muri + default_apps_api, m_timeout_ms);
-	}
-
-	if(has_marathon())
-	{
-		rebuild_marathon_state(true);
+		if(has_marathon())
+		{
+			rebuild_marathon_state(true);
+		}
 	}
 #endif // HAS_CAPTURE
 }

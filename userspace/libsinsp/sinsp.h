@@ -106,6 +106,7 @@ class sinsp_filter;
 class cycle_writer;
 class sinsp_protodecoder;
 class k8s;
+class mesos;
 
 vector<string> sinsp_split(const string &s, char delim);
 
@@ -658,6 +659,9 @@ public:
 	void init_k8s_client(string* api_server, string* ssl_cert);
 	k8s* get_k8s_client() const { return m_k8s_client; }
 
+	void init_mesos_client(string* api_server);
+	mesos* get_mesos_client() const { return m_mesos_client; }
+
 	//
 	// Misc internal stuff
 	//
@@ -756,6 +760,8 @@ private:
 	sinsp_threadinfo* find_thread_test(int64_t tid, bool lookup_only);
 	bool remove_inactive_threads();
 	void update_kubernetes_state();
+	void update_mesos_state();
+	void get_mesos_data();
 
 	static int64_t get_file_size(const std::string& fname, char *error);
 	static std::string get_error_desc(const std::string& msg = "");
@@ -793,12 +799,21 @@ private:
 	sinsp_container_manager m_container_manager;
 
 	//
-	// Kubernetes stuff
+	// Kubernetes
 	//
 	string* m_k8s_api_server;
 	string* m_k8s_api_cert;
 	k8s* m_k8s_client;
 	uint64_t m_k8s_last_watch_time_ns;
+
+	//
+	// Mesos/Marathon
+	//
+	string* m_mesos_api_server;
+	vector<string> m_marathon_api_server;
+	mesos* m_mesos_client;
+	uint64_t m_mesos_last_watch_time_ns;
+
 
 	//
 	// True if the command line argument is set to show container information

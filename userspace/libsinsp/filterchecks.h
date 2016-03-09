@@ -19,6 +19,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 #include <json/json.h>
 #include "k8s.h"
+#include "mesos.h"
 
 #ifdef HAS_FILTERING
 

@@ -19,12 +19,40 @@
 class mesos
 {
 public:
+
+#ifdef HAS_CAPTURE
+	struct capture
+	{
+		static const int MARATHON_ID = 0;
+		static const int MARATHON_GROUPS = 1;
+		static const int MARATHON_APPS = 2;
+
+		typedef std::vector<std::tuple<std::string, std::string, std::string>> marathon_list;
+
+		capture(const std::string& mesos_state, const std::string& marathon_id,
+			const std::string& marathon_groups, const std::string& marathon_apps):
+				m_mesos_state(mesos_state),
+				m_marathon { std::make_tuple(marathon_id, marathon_groups, marathon_apps) }
+		{
+		}
+
+		capture(const std::string& mesos_state): m_mesos_state(mesos_state)
+		{
+		}
+
+		std::string   m_mesos_state;
+		marathon_list m_marathon;
+	};
+	typedef std::deque<capture> capture_list;
+#endif // HAS_CAPTURE
+
 	static const std::string default_state_uri;
 	static const std::string default_state_api;
 	static const std::string default_marathon_uri;
 	static const std::string default_groups_api;
 	static const std::string default_apps_api;
 	static const std::string default_watch_api;
+	static const int default_timeout_ms;
 
 #ifdef HAS_CAPTURE
 	typedef mesos_http::marathon_uri_t uri_list_t;
@@ -32,13 +60,14 @@ public:
 	typedef std::vector<std::string> uri_list_t;
 #endif // HAS_CAPTURE
 
-	mesos(const std::string& state_uri = default_state_uri,
+	mesos(const std::string& state_uri,
 		const std::string& state_api = default_state_api,
 		const uri_list_t& marathon_uris = uri_list_t(),
 		const std::string& groups_api = "",
 		const std::string& apps_api = "",
 		bool discover_mesos_leader = false,
-		int timeout_ms = 5000L);
+		int timeout_ms = default_timeout_ms,
+		bool is_captured = false);
 
 	~mesos();
 
@@ -53,6 +82,44 @@ public:
 #ifdef HAS_CAPTURE
 	void send_data_request(bool collect = true);
 	void collect_data();
+
+	const capture_list& get_capture_events() const
+	{
+		return m_capture;
+	}
+
+	std::string dequeue_capture_event()
+	{
+		std::ostringstream os;
+		if(m_capture.size())
+		{
+			capture& c = m_capture.front();
+			if(!c.m_mesos_state.empty())
+			{
+				os << "{\"mesos_state\":" << c.m_mesos_state;
+				if(!c.m_marathon.empty())
+				{
+					os << ",\"marathon\":{";
+					for(const auto& marathon : c.m_marathon)
+					{
+						os << ",\"id\":\"" << std::get<capture::MARATHON_ID>(marathon) << '"'
+							<< ",\"groups\":" << std::get<capture::MARATHON_GROUPS>(marathon)
+							<< ",\"apps\":" << std::get<capture::MARATHON_APPS>(marathon);
+					}
+					os << '}';
+				}
+				os << '}';
+			}
+			m_capture.pop_front();
+		}
+		return os.str();
+	}
+
+	void enqueue_capture_event(const std::string& mesos_state, const std::string& marathon_id = "",
+		const std::string& marathon_groups = "", const std::string& marathon_apps = "")
+	{
+		m_capture.emplace_back(capture(mesos_state, marathon_id, marathon_groups, marathon_apps));
+	}
 #endif // HAS_CAPTURE
 
 private:
@@ -108,27 +175,29 @@ private:
 	void remove_framework(const Json::Value& framework);
 
 #ifdef HAS_CAPTURE
-	typedef std::unordered_map<std::string, marathon_http::ptr_t>       marathon_http_map;
+	typedef std::unordered_map<std::string, marathon_http::ptr_t> marathon_http_map;
 
-	mesos_http::ptr_t m_state_http;
-	marathon_http_map m_marathon_groups_http;
-	marathon_http_map m_marathon_apps_http;
-	mesos_collector   m_collector;
-	std::string       m_mesos_uri;
-	uri_list_t        m_marathon_uris;
+	mesos_http::ptr_t   m_state_http;
+	marathon_http_map   m_marathon_groups_http;
+	marathon_http_map   m_marathon_apps_http;
+	mesos_collector     m_collector;
+	std::string         m_mesos_uri;
+	uri_list_t          m_marathon_uris;
+	capture_list        m_capture;
 #endif // HAS_CAPTURE
 
-	mesos_state_t     m_state;
-	bool              m_creation_logged;
-	bool              m_discover_mesos_leader;
-	long              m_timeout_ms;
+	mesos_state_t m_state;
+	bool          m_creation_logged;
+	bool          m_discover_mesos_leader;
+	long          m_timeout_ms;
+	bool          m_is_captured;
 
 	typedef std::map<std::string, std::string> json_map_type_t;
-	std::string m_mesos_state_json;
+	std::string     m_mesos_state_json;
 	json_map_type_t m_marathon_groups_json;
 	json_map_type_t m_marathon_apps_json;
-	time_t m_last_mesos_refresh = 0;
-	time_t m_last_marathon_refresh = 0;
+	time_t          m_last_mesos_refresh = 0;
+	time_t          m_last_marathon_refresh = 0;
 
 	typedef std::unordered_set<std::string> framework_list_t;
 	framework_list_t m_inactive_frameworks;

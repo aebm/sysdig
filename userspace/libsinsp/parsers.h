@@ -23,11 +23,11 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 
 class sinsp_fd_listener;
 
-class k8s_metaevents_state
+class metaevents_state
 {
 public:
 	bool m_new_group;
-	uint32_t m_n_additional_k8s_events_to_add;
+	uint32_t m_n_additional_events_to_add;
 	sinsp_evt m_metaevt;
 	scap_evt* m_piscapevt;
 };
@@ -63,6 +63,7 @@ public:
 	void register_event_callback(sinsp_pd_callback_type etype, sinsp_protodecoder* dec);
 
 	void schedule_k8s_events(sinsp_evt *evt);
+	void schedule_mesos_events(sinsp_evt *evt);
 
 	//
 	// Protocol decoders callback lists
@@ -71,6 +72,11 @@ public:
 	vector<sinsp_protodecoder*> m_connect_callbacks;
 
 private:
+	//
+	// Initializers
+	//
+	void init_metaevt(metaevents_state& evt_state, uint16_t evt_type);
+
 	//
 	// Helpers
 	//
@@ -119,6 +125,7 @@ private:
 	void parse_cpu_hotplug_enter(sinsp_evt* evt);
 	void parse_k8s_evt(sinsp_evt *evt);
 	void parse_chroot_exit(sinsp_evt *evt);
+	void parse_mesos_evt(sinsp_evt *evt);
 
 	inline void add_socket(sinsp_evt* evt, int64_t fd, uint32_t domain, uint32_t type, uint32_t protocol);
 	inline void add_pipe(sinsp_evt *evt, int64_t tid, int64_t fd, uint64_t ino);
@@ -151,7 +158,8 @@ private:
 	//
 	vector<sinsp_protodecoder*> m_protodecoders;
 
-	k8s_metaevents_state m_k8s_metaevents_state;
+	metaevents_state m_k8s_metaevents_state;
+	metaevents_state m_mesos_metaevents_state;
 
 	stack<uint8_t*> m_tmp_events_buffer;
 	friend class sinsp_analyzer;
