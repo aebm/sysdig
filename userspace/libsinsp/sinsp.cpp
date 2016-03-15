@@ -137,8 +137,8 @@ sinsp::sinsp() :
 	m_k8s_api_server = NULL;
 	m_k8s_api_cert = NULL;
 
-	m_mesos_api_server = NULL;
 	m_mesos_client = NULL;
+	m_mesos_last_watch_time_ns = 0;
 
 	m_filter_proc_table_when_saving = false;
 }
@@ -185,7 +185,6 @@ sinsp::~sinsp()
 	delete m_k8s_api_server;
 	delete m_k8s_api_cert;
 
-	delete m_mesos_api_server;
 	delete m_mesos_client;
 }
 
@@ -295,7 +294,6 @@ void sinsp::init()
 		// Rewind and consume the exact number of events
 		//
 		scap_fseek(m_h, off);
-
 		for(uint32_t j = 0; j < ncnt; j++)
 		{
 			sinsp_evt* tevt;
@@ -928,10 +926,15 @@ int32_t sinsp::next(OUT sinsp_evt **puevt)
 	{
 		m_thread_manager->remove_inactive_threads();
 		m_container_manager.remove_inactive_containers();
-		
+
 		if(m_k8s_client)
 		{
 			update_kubernetes_state();
+		}
+
+		if(m_mesos_client)
+		{
+			update_mesos_state();
 		}
 	}
 #endif // HAS_ANALYZER
@@ -1544,20 +1547,20 @@ void sinsp::init_mesos_client(string* api_server)
 {
 	if(m_mesos_client == NULL)
 	{
-		ASSERT(api_server);
-		// -m <url[,marathon_url]>
-		std::string::size_type pos = api_server->find(',');
-		if(pos != std::string::npos)
+		if(api_server)
 		{
-			m_marathon_api_server.clear();
-			m_marathon_api_server.push_back(api_server->substr(pos + 1));
+			// -m <url[,marathon_url]>
+			std::string::size_type pos = api_server->find(',');
+			if(pos != std::string::npos)
+			{
+				m_marathon_api_server.clear();
+				m_marathon_api_server.push_back(api_server->substr(pos + 1));
+			}
+			m_mesos_api_server = api_server->substr(0, pos);
 		}
-		delete m_mesos_api_server;
-		m_mesos_api_server = new std::string(api_server->substr(0, pos));
 
-		bool is_live = !m_mesos_api_server->empty();
-
-		m_mesos_client = new mesos(*m_mesos_api_server, mesos::default_state_api,
+		bool is_live = !m_mesos_api_server.empty();
+		m_mesos_client = new mesos(m_mesos_api_server, mesos::default_state_api,
 									m_marathon_api_server,
 									mesos::default_groups_api,
 									mesos::default_apps_api,
@@ -1588,7 +1591,7 @@ void sinsp::init_k8s_client(string* api_server, string* ssl_cert)
 
 			// -K <bt_file> | <cert_file>:<key_file[#password]>[:<ca_cert_file>]
 			std::string::size_type pos = ssl_cert->find(':');
-			if(pos == std::string::npos) // ca_cert only obsoleted, single entry is bearer token
+			if(pos == std::string::npos) // ca_cert-only is obsoleted, single entry is now bearer token
 			{
 				k8s_bt = std::make_shared<sinsp_curl::bearer_token>(*ssl_cert);
 				ssl_cert->clear();
@@ -1636,7 +1639,6 @@ void sinsp::init_k8s_client(string* api_server, string* ssl_cert)
 						ca_cert, ca_cert.empty() ? false : true, "PEM");
 		}
 #endif // HAS_CAPTURE
-		g_logger.log("Fetching initial k8s state", sinsp_logger::SEV_INFO);
 		bool is_live = !m_k8s_api_server->empty();
 		m_k8s_client = new k8s(*m_k8s_api_server,
 			is_live ? true : false, // watch
@@ -1652,8 +1654,10 @@ void sinsp::init_k8s_client(string* api_server, string* ssl_cert)
 
 	return;
 
+#ifdef HAS_CAPTURE
 ssl_err:
 	throw sinsp_exception("Invalid K8S SSL entry: " + *ssl_cert);
+#endif // HAS_CAPTURE
 }
 
 void sinsp::update_kubernetes_state()
@@ -1663,12 +1667,12 @@ void sinsp::update_kubernetes_state()
 	{
 		m_k8s_last_watch_time_ns = m_lastevent_ts;
 
-		if(m_k8s_client->is_alive())
+		if(m_parser && m_k8s_client->is_alive())
 		{
 			uint64_t delta = sinsp_utils::get_current_time_ns();
 
 			m_k8s_client->watch();
-			this->m_parser->schedule_k8s_events(&m_meta_evt);
+			m_parser->schedule_k8s_events(&m_meta_evt);
 
 			delta = sinsp_utils::get_current_time_ns() - delta;
 
@@ -1684,20 +1688,35 @@ void sinsp::update_kubernetes_state()
 	}
 }
 
-void sinsp::get_mesos_data()
+bool sinsp::get_mesos_data()
 {
-	static time_t last_mesos_refresh = 0;
-	ASSERT(m_mesos_client);
-	ASSERT(m_mesos_client->is_alive());
-	g_logger.log("Getting Mesos data ...", sinsp_logger::SEV_DEBUG);
-
-	time_t now; time(&now);
-	m_mesos_client->collect_data();
-	if(difftime(now, last_mesos_refresh) > 10)
+	bool ret = false;
+	try
 	{
-		m_mesos_client->send_data_request();
-		last_mesos_refresh = now;
+		static time_t last_mesos_refresh = 0;
+		ASSERT(m_mesos_client);
+		ASSERT(m_mesos_client->is_alive());
+
+		time_t now; time(&now);
+		if(last_mesos_refresh)
+		{
+			ret = m_mesos_client->collect_data();
+		}
+		if(difftime(now, last_mesos_refresh) > 10)
+		{
+			g_logger.log("Requesting Mesos data ...", sinsp_logger::SEV_DEBUG);
+			m_mesos_client->send_data_request();
+			last_mesos_refresh = now;
+		}
 	}
+	catch(std::exception& ex)
+	{
+		g_logger.log(std::string("Mesos exception: ") + ex.what(), sinsp_logger::SEV_ERROR);
+		delete m_mesos_client;
+		m_mesos_client = NULL;
+		init_mesos_client(0);
+	}
+	return ret;
 }
 
 void sinsp::update_mesos_state()
@@ -1706,24 +1725,22 @@ void sinsp::update_mesos_state()
 	if(m_lastevent_ts > m_mesos_last_watch_time_ns + ONE_SECOND_IN_NS)
 	{
 		m_mesos_last_watch_time_ns = m_lastevent_ts;
-
 		if(m_mesos_client->is_alive())
 		{
 			uint64_t delta = sinsp_utils::get_current_time_ns();
-
-			get_mesos_data();
-			this->m_parser->schedule_mesos_events(&m_meta_evt);
-
-			delta = sinsp_utils::get_current_time_ns() - delta;
-
-			g_logger.format(sinsp_logger::SEV_DEBUG, "Updating Mesos state took %" PRIu64 " ms", delta / 1000000LL);
+			if(m_parser && get_mesos_data())
+			{
+				m_parser->schedule_mesos_events(&m_meta_evt);
+				delta = sinsp_utils::get_current_time_ns() - delta;
+				g_logger.format(sinsp_logger::SEV_DEBUG, "Updating Mesos state took %" PRIu64 " ms", delta / 1000000LL);
+			}
 		}
 		else
 		{
-			g_logger.format(sinsp_logger::SEV_WARNING, "Mesos connection not active anymore, retrying");
+			g_logger.format(sinsp_logger::SEV_ERROR, "Mesos connection not active anymore, retrying ...");
 			delete m_mesos_client;
 			m_mesos_client = NULL;
-			init_mesos_client(m_mesos_api_server);
+			init_mesos_client(0);
 		}
 	}
 }

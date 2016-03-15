@@ -67,7 +67,7 @@ protected:
 
 	callback_func_t get_parse_func();
 	static std::string make_request(uri url, curl_version_info_data* m_curl_version = 0);
-	bool try_parse(const std::string& json);
+	static bool try_parse(const std::string& json);
 	static bool is_framework_active(const Json::Value& framework);
 	static std::string get_framework_url(const Json::Value& framework);
 
@@ -97,12 +97,14 @@ private:
 	bool                    m_is_mesos_state;
 	marathon_uri_t          m_marathon_uris;
 	bool                    m_discover_lead_master;
+	std::string::size_type  m_content_length = std::string::npos;
 
 	friend class mesos;
 
-	void add_data_chunk(std::istringstream&& chunk_str);
-	void extract_data(const std::string& data);
+	void extract_data(std::string& data);
 	void handle_data();
+	bool detect_chunked_transfer(const std::string& data);
+	void handle_json(std::string::size_type end_pos, bool chunked);
 
 	// probably belongs to utils
 	template<typename charT>
@@ -171,7 +173,14 @@ inline mesos_http::callback_func_t mesos_http::get_parse_func()
 inline bool mesos_http::try_parse(const std::string& json)
 {
 	Json::Value root;
-	return Json::Reader().parse(json, root, true);
+	try
+	{
+		return Json::Reader().parse(json, root, true);
+	}
+	catch(...)
+	{
+		return false;
+	}
 }
 
 inline const std::string& mesos_http::get_framework_id() const

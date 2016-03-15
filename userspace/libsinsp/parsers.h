@@ -30,6 +30,7 @@ public:
 	uint32_t m_n_additional_events_to_add;
 	sinsp_evt m_metaevt;
 	scap_evt* m_piscapevt;
+	uint32_t m_scap_buf_size;
 };
 
 class sinsp_parser
@@ -71,11 +72,16 @@ public:
 	vector<sinsp_protodecoder*> m_open_callbacks;
 	vector<sinsp_protodecoder*> m_connect_callbacks;
 
+	//
+	// Initializers
+	//
+	static void init_scapevt(metaevents_state& evt_state, uint16_t evt_type, uint16_t buf_size);
+
 private:
 	//
 	// Initializers
 	//
-	void init_metaevt(metaevents_state& evt_state, uint16_t evt_type);
+	void init_metaevt(metaevents_state& evt_state, uint16_t evt_type, uint16_t buf_size);
 
 	//
 	// Helpers

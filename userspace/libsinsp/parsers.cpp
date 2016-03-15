@@ -56,22 +56,8 @@ sinsp_parser::sinsp_parser(sinsp *inspector) :
 	m_tmp_evt(m_inspector),
 	m_fd_listener(NULL)
 {
-	init_metaevt(m_k8s_metaevents_state, PPME_K8S_E);
-	init_metaevt(m_mesos_metaevents_state, PPME_MESOS_E);
-}
-
-void sinsp_parser::init_metaevt(metaevents_state& evt_state, uint16_t evt_type)
-{
-	evt_state.m_piscapevt = (scap_evt*)new char[SP_EVT_BUF_SIZE];
-	evt_state.m_piscapevt->type = evt_type;
-
-	evt_state.m_metaevt.m_inspector = m_inspector;
-	evt_state.m_metaevt.m_info = &(g_infotables.m_event_info[PPME_SYSDIGEVENT_X]);
-	evt_state.m_metaevt.m_pevt = NULL;
-	evt_state.m_metaevt.m_cpuid = 0;
-	evt_state.m_metaevt.m_evtnum = 0;
-	evt_state.m_metaevt.m_pevt = evt_state.m_piscapevt;
-	evt_state.m_metaevt.m_fdinfo = NULL;
+	init_metaevt(m_k8s_metaevents_state, PPME_K8S_E, SP_EVT_BUF_SIZE);
+	init_metaevt(m_mesos_metaevents_state, PPME_MESOS_E, SP_EVT_BUF_SIZE);
 }
 
 sinsp_parser::~sinsp_parser()
@@ -88,8 +74,27 @@ sinsp_parser::~sinsp_parser()
 		m_tmp_events_buffer.pop();
 	}
 	m_protodecoders.clear();
-	delete[] m_k8s_metaevents_state.m_piscapevt;
-	delete[] m_mesos_metaevents_state.m_piscapevt;
+	free(m_k8s_metaevents_state.m_piscapevt);
+	free(m_mesos_metaevents_state.m_piscapevt);
+}
+
+void sinsp_parser::init_scapevt(metaevents_state& evt_state, uint16_t evt_type, uint16_t buf_size)
+{
+	evt_state.m_piscapevt = (scap_evt*) realloc(evt_state.m_piscapevt, buf_size);
+	evt_state.m_scap_buf_size = buf_size;
+	evt_state.m_piscapevt->type = evt_type;
+	evt_state.m_metaevt.m_pevt = evt_state.m_piscapevt;
+}
+
+void sinsp_parser::init_metaevt(metaevents_state& evt_state, uint16_t evt_type, uint16_t buf_size)
+{
+	evt_state.m_piscapevt = 0;
+	init_scapevt(evt_state, evt_type, buf_size);
+	evt_state.m_metaevt.m_inspector = m_inspector;
+	evt_state.m_metaevt.m_info = &(g_infotables.m_event_info[PPME_SYSDIGEVENT_X]);
+	evt_state.m_metaevt.m_cpuid = 0;
+	evt_state.m_metaevt.m_evtnum = 0;
+	evt_state.m_metaevt.m_fdinfo = NULL;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1516,7 +1521,8 @@ void sinsp_parser::parse_openat_dir(sinsp_evt *evt, char* name, int64_t dirfd, O
 	}
 }
 
-void schedule_more_k8s_evts(sinsp* inspector, void* data)
+template <typename T>
+void schedule_more_evts(sinsp* inspector, void* data, T* client, ppm_event_type evt_type)
 {
 #ifdef HAS_CAPTURE
 	ASSERT(data);
@@ -1530,34 +1536,31 @@ void schedule_more_k8s_evts(sinsp* inspector, void* data)
 		return;
 	}
 
-	k8s* k8s_client = inspector->get_k8s_client();
-	ASSERT(k8s_client);
-	if(!k8s_client->get_capture_events().size())
+	ASSERT(client);
+	if(!client->get_capture_events().size())
 	{
-		g_logger.log("K8S event scheduled but no events available."
-					"All pending K8S event request are cancelled.", sinsp_logger::SEV_ERROR);
+		g_logger.log(std::string("An event scheduled but no events available."
+					"All pending event requests for "
+					"[") + typeid(T).name() + "] are cancelled.", sinsp_logger::SEV_ERROR);
 		state->m_new_group = false;
 		state->m_n_additional_events_to_add = 0;
 		inspector->remove_meta_event_callback();
 		return;
 	}
-	string payload = k8s_client->dequeue_capture_event();
+	string payload = client->dequeue_capture_event();
 	std::size_t tot_len = sizeof(scap_evt) + sizeof(uint16_t) + payload.size() + 1;
 
-	if(tot_len <= SP_EVT_BUF_SIZE)
+	if(tot_len > state->m_scap_buf_size)
 	{
-		state->m_piscapevt->len = tot_len;
-		uint16_t* plen = (uint16_t*)((char *)state->m_piscapevt + sizeof(struct ppm_evt_hdr));
-		plen[0] = (uint16_t)payload.size() + 1;
-		uint8_t* edata = (uint8_t*)plen + sizeof(uint16_t);
-		memcpy(edata, payload.c_str(), plen[0]);
-		good_event = true;
+		sinsp_parser::init_scapevt(*state, evt_type, tot_len);
 	}
-	else
-	{
-		g_logger.log("K8S event larger than available buffer, will not be recorded. "
-					"This may result in an inaccurate K8S event log.", sinsp_logger::SEV_ERROR);
-	}
+
+	state->m_piscapevt->len = tot_len;
+	uint16_t* plen = (uint16_t*)((char *)state->m_piscapevt + sizeof(struct ppm_evt_hdr));
+	plen[0] = (uint16_t)payload.size() + 1;
+	uint8_t* edata = (uint8_t*)plen + sizeof(uint16_t);
+	memcpy(edata, payload.c_str(), plen[0]);
+	good_event = true;
 
 	state->m_n_additional_events_to_add--;
 	if(state->m_n_additional_events_to_add == 0)
@@ -1569,6 +1572,11 @@ void schedule_more_k8s_evts(sinsp* inspector, void* data)
 		inspector->add_meta_event(&state->m_metaevt);
 	}
 #endif // HAS_CAPTURE
+}
+
+void schedule_more_k8s_evts(sinsp* inspector, void* data)
+{
+	schedule_more_evts(inspector, data, inspector->get_k8s_client(), PPME_K8S_E);
 }
 
 void sinsp_parser::schedule_k8s_events(sinsp_evt *evt)
@@ -1597,57 +1605,7 @@ void sinsp_parser::schedule_k8s_events(sinsp_evt *evt)
 
 void schedule_more_mesos_evts(sinsp* inspector, void* data)
 {
-#ifdef HAS_CAPTURE
-	ASSERT(data);
-	bool good_event = false;
-	metaevents_state* state = (metaevents_state*)data;
-
-	if(state->m_new_group == true)
-	{
-		state->m_new_group = false;
-		inspector->add_meta_event(&state->m_metaevt);
-		return;
-	}
-
-	mesos* mesos_client = inspector->get_mesos_client();
-	ASSERT(mesos_client);
-	if(!mesos_client->get_capture_events().size())
-	{
-		g_logger.log("Mesos event scheduled but no events available."
-					"All pending Mesos event request are cancelled.", sinsp_logger::SEV_ERROR);
-		state->m_new_group = false;
-		state->m_n_additional_events_to_add = 0;
-		inspector->remove_meta_event_callback();
-		return;
-	}
-	string payload = mesos_client->dequeue_capture_event();
-	std::size_t tot_len = sizeof(scap_evt) + sizeof(uint16_t) + payload.size() + 1;
-
-	if(tot_len <= SP_EVT_BUF_SIZE)
-	{
-		state->m_piscapevt->len = tot_len;
-		uint16_t* plen = (uint16_t*)((char *)state->m_piscapevt + sizeof(struct ppm_evt_hdr));
-		plen[0] = (uint16_t)payload.size() + 1;
-		uint8_t* edata = (uint8_t*)plen + sizeof(uint16_t);
-		memcpy(edata, payload.c_str(), plen[0]);
-		good_event = true;
-	}
-	else
-	{
-		g_logger.log("Mesos event larger than available buffer, will not be recorded. "
-					"This may result in an inaccurate Mesos event log.", sinsp_logger::SEV_ERROR);
-	}
-
-	state->m_n_additional_events_to_add--;
-	if(state->m_n_additional_events_to_add == 0)
-	{
-		inspector->remove_meta_event_callback();
-	}
-	else if(good_event)
-	{
-		inspector->add_meta_event(&state->m_metaevt);
-	}
-#endif // HAS_CAPTURE
+	schedule_more_evts(inspector, data, inspector->get_mesos_client(), PPME_MESOS_E);
 }
 
 void sinsp_parser::schedule_mesos_events(sinsp_evt *evt)
@@ -3713,7 +3671,7 @@ void sinsp_parser::parse_mesos_evt(sinsp_evt *evt)
 	//g_logger.log(json, sinsp_logger::SEV_DEBUG);
 	ASSERT(m_inspector);
 	ASSERT(m_inspector->m_mesos_client);
-	//m_inspector->m_mesos_client->simulate_watch_event(json);
+	m_inspector->m_mesos_client->simulate_event(json);
 }
 
 void sinsp_parser::parse_chroot_exit(sinsp_evt *evt)

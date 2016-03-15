@@ -761,7 +761,7 @@ private:
 	bool remove_inactive_threads();
 	void update_kubernetes_state();
 	void update_mesos_state();
-	void get_mesos_data();
+	bool get_mesos_data();
 
 	static int64_t get_file_size(const std::string& fname, char *error);
 	static std::string get_error_desc(const std::string& msg = "");
@@ -809,7 +809,7 @@ private:
 	//
 	// Mesos/Marathon
 	//
-	string* m_mesos_api_server;
+	string m_mesos_api_server;
 	vector<string> m_marathon_api_server;
 	mesos* m_mesos_client;
 	uint64_t m_mesos_last_watch_time_ns;

@@ -543,7 +543,6 @@ captureinfo do_inspect(sinsp* inspector,
 			handle_end_of_file(print_progress, formatter);
 			break;
 		}
-
 		res = inspector->next(&ev);
 
 		if(res == SCAP_TIMEOUT)
