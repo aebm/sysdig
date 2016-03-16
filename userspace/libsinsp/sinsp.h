@@ -608,15 +608,15 @@ public:
 	*/
 	inline bool is_debug_enabled()
 	{
-		return m_isdebug_enabled;		
+		return m_isdebug_enabled;
 	}
 
-        /*!
-          \brief Set a flag indicating if the command line requested to show container information.
+	/*!
+	  \brief Set a flag indicating if the command line requested to show container information.
 
-          \param set true if the command line arugment is set to show container information 
-        */
-        void set_print_container_data(bool print_container_data);
+	  \param set true if the command line arugment is set to show container information 
+	*/
+	void set_print_container_data(bool print_container_data);
 
 
 	/*!
@@ -656,10 +656,10 @@ public:
 	*/
 	double get_read_progress();
 
-	void init_k8s_client(string* api_server, string* ssl_cert);
+	void init_k8s_client(string* api_server, string* ssl_cert, bool verbose = false);
 	k8s* get_k8s_client() const { return m_k8s_client; }
 
-	void init_mesos_client(string* api_server);
+	void init_mesos_client(string* api_server, bool verbose = false);
 	mesos* get_mesos_client() const { return m_mesos_client; }
 
 	//
@@ -814,6 +814,11 @@ private:
 	mesos* m_mesos_client;
 	uint64_t m_mesos_last_watch_time_ns;
 
+	//
+	// True if sysdig is ran with -v.
+	// Used by mesos and k8s objects.
+	//
+	bool m_verbose_json = false;
 
 	//
 	// True if the command line argument is set to show container information
@@ -932,7 +937,8 @@ private:
 	friend class sinsp_filter_check_fd;
 	friend class sinsp_filter_check_event;
 	friend class sinsp_filter_check_k8s;
-	
+	friend class sinsp_filter_check_mesos;
+
 	template<class TKey,class THash,class TCompare> friend class sinsp_connection_manager;
 };
 

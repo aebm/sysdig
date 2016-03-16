@@ -1371,7 +1371,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 						k8s_api_cert = new string(k8s_cert_env);
 					}
 				}
-				inspector->init_k8s_client(k8s_api, k8s_api_cert);
+				inspector->init_k8s_client(k8s_api, k8s_api_cert, verbose);
 				k8s_api = 0;
 				k8s_api_cert = 0;
 			}
@@ -1387,7 +1387,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 						}
 					}
 					k8s_api = new string(k8s_api_env);
-					inspector->init_k8s_client(k8s_api, k8s_api_cert);
+					inspector->init_k8s_client(k8s_api, k8s_api_cert, verbose);
 				}
 				else
 				{
@@ -1403,14 +1403,14 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 			//
 			if(mesos_api)
 			{
-				inspector->init_mesos_client(mesos_api);
+				inspector->init_mesos_client(mesos_api, verbose);
 			}
 			else if(char* mesos_api_env = getenv("SYSDIG_MESOS_API"))
 			{
 				if(mesos_api_env != NULL)
 				{
 					mesos_api = new string(mesos_api_env);
-					inspector->init_mesos_client(mesos_api);
+					inspector->init_mesos_client(mesos_api, verbose);
 				}
 			}
 			delete mesos_api;

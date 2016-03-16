@@ -715,4 +715,42 @@ private:
 	string m_tstr;
 };
 
+class sinsp_filter_check_mesos : public sinsp_filter_check
+{
+public:
+	enum check_type
+	{
+		TYPE_MESOS_TASK_NAME = 0,
+		TYPE_MESOS_TASK_ID,
+		TYPE_MESOS_TASK_LABEL,
+		TYPE_MESOS_TASK_LABELS,
+		TYPE_MESOS_FRAMEWORK_NAME,
+		TYPE_MESOS_FRAMEWORK_ID,
+		TYPE_MARATHON_APP_NAME,
+		TYPE_MARATHON_APP_ID,
+		TYPE_MARATHON_APP_LABEL,
+		TYPE_MARATHON_APP_LABELS,
+		TYPE_MARATHON_GROUP_NAME,
+		TYPE_MARATHON_GROUP_ID,
+	};
+
+	sinsp_filter_check_mesos();
+	sinsp_filter_check* allocate_new();
+	int32_t parse_field_name(const char* str, bool alloc_state);
+	uint8_t* extract(sinsp_evt *evt, OUT uint32_t* len);
+
+private:
+
+	int32_t extract_arg(const string& fldname, const string& val);
+	mesos_task::ptr_t find_task_for_thread(const sinsp_threadinfo* tinfo);
+	const mesos_framework* find_framework_by_task(mesos_task::ptr_t task);
+	marathon_app::ptr_t find_app_by_task(mesos_task::ptr_t task);
+	marathon_group::ptr_t find_group_by_task(mesos_task::ptr_t task);
+	void concatenate_labels(const mesos_pair_list& labels, string* s);
+	bool find_label(const mesos_pair_list& labels, const string& key, string* value);
+
+	string m_argname;
+	string m_tstr;
+};
+
 #endif // HAS_FILTERING

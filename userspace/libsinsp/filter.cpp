@@ -68,6 +68,7 @@ sinsp_filter_check_list::sinsp_filter_check_list()
 	add_filter_check(new sinsp_filter_check_utils());
 	add_filter_check(new sinsp_filter_check_fdlist());
 	add_filter_check(new sinsp_filter_check_k8s());
+	add_filter_check(new sinsp_filter_check_mesos());
 }
 
 sinsp_filter_check_list::~sinsp_filter_check_list()

@@ -29,16 +29,18 @@ mesos::mesos(const std::string& state_uri,
 	const std::string& apps_api,
 	bool discover_mesos_leader,
 	int timeout_ms,
-	bool is_captured):
+	bool is_captured,
+	bool verbose):
 #ifdef HAS_CAPTURE
 		m_collector(false),
 		m_mesos_uri(state_uri),
 		m_marathon_uris(marathon_uris),
 #endif // HAS_CAPTURE
-		m_state(is_captured),
+		m_state(is_captured, verbose),
 		m_creation_logged(false),
 		m_discover_mesos_leader(discover_mesos_leader),
-		m_timeout_ms(timeout_ms)
+		m_timeout_ms(timeout_ms),
+		m_verbose(verbose)
 {
 	g_logger.log(std::string("Creating Mesos object, failover autodiscovery set to ") +
 				 (m_discover_mesos_leader ? "true" : "false"),
@@ -737,6 +739,10 @@ void mesos::parse_state(Json::Value&& root)
 		capture_frameworks(root, capt);
 		capture_slaves(root, capt);
 		m_state.enqueue_capture_event(mesos_state_t::capture::MESOS_STATE, Json::FastWriter().write(capt));
+	}
+	if(m_verbose)
+	{
+		std::cout << Json::FastWriter().write(root) << std::endl;
 	}
 	if(!m_creation_logged)
 	{

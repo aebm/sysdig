@@ -1543,8 +1543,9 @@ bool sinsp::remove_inactive_threads()
 	return m_thread_manager->remove_inactive_threads();
 }
 
-void sinsp::init_mesos_client(string* api_server)
+void sinsp::init_mesos_client(string* api_server, bool verbose)
 {
+	m_verbose_json = verbose;
 	if(m_mesos_client == NULL)
 	{
 		if(api_server)
@@ -1566,13 +1567,15 @@ void sinsp::init_mesos_client(string* api_server)
 									mesos::default_apps_api,
 									false, // no leader follow
 									mesos::default_timeout_ms,
-									is_live);
+									is_live,
+									m_verbose_json);
 	}
 }
 
-void sinsp::init_k8s_client(string* api_server, string* ssl_cert)
+void sinsp::init_k8s_client(string* api_server, string* ssl_cert, bool verbose)
 {
 	ASSERT(api_server);
+	m_verbose_json = verbose;
 	m_k8s_api_server = api_server;
 	m_k8s_api_cert = ssl_cert;
 
@@ -1683,7 +1686,7 @@ void sinsp::update_kubernetes_state()
 			g_logger.format(sinsp_logger::SEV_WARNING, "Kubernetes connection not active anymore, retrying");
 			delete m_k8s_client;
 			m_k8s_client = NULL;
-			init_k8s_client(m_k8s_api_server, m_k8s_api_cert);
+			init_k8s_client(m_k8s_api_server, m_k8s_api_cert, m_verbose_json);
 		}
 	}
 }
@@ -1714,7 +1717,7 @@ bool sinsp::get_mesos_data()
 		g_logger.log(std::string("Mesos exception: ") + ex.what(), sinsp_logger::SEV_ERROR);
 		delete m_mesos_client;
 		m_mesos_client = NULL;
-		init_mesos_client(0);
+		init_mesos_client(0, m_verbose_json);
 	}
 	return ret;
 }
@@ -1740,7 +1743,7 @@ void sinsp::update_mesos_state()
 			g_logger.format(sinsp_logger::SEV_ERROR, "Mesos connection not active anymore, retrying ...");
 			delete m_mesos_client;
 			m_mesos_client = NULL;
-			init_mesos_client(0);
+			init_mesos_client(0, m_verbose_json);
 		}
 	}
 }

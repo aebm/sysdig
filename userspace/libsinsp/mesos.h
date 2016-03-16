@@ -41,7 +41,8 @@ public:
 		const std::string& apps_api = "",
 		bool discover_mesos_leader = false,
 		int timeout_ms = default_timeout_ms,
-		bool is_captured = false);
+		bool is_captured = false,
+		bool verbose = false);
 
 	~mesos();
 
@@ -96,12 +97,12 @@ private:
 
 	typedef std::unordered_map<std::string, marathon_http::ptr_t> marathon_http_map;
 
-	mesos_http::ptr_t   m_state_http;
-	marathon_http_map   m_marathon_groups_http;
-	marathon_http_map   m_marathon_apps_http;
-	mesos_collector     m_collector;
-	std::string         m_mesos_uri;
-	uri_list_t          m_marathon_uris;
+	mesos_http::ptr_t m_state_http;
+	marathon_http_map m_marathon_groups_http;
+	marathon_http_map m_marathon_apps_http;
+	mesos_collector   m_collector;
+	std::string       m_mesos_uri;
+	uri_list_t        m_marathon_uris;
 #endif // HAS_CAPTURE
 
 private:
@@ -130,6 +131,7 @@ private:
 	bool          m_creation_logged;
 	bool          m_discover_mesos_leader;
 	long          m_timeout_ms;
+	bool          m_verbose = false;
 
 	typedef std::map<std::string, std::string> json_map_type_t;
 	std::string     m_mesos_state_json;

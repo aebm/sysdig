@@ -13,11 +13,12 @@
 // state
 //
 
-mesos_state_t::mesos_state_t(bool is_captured) : m_is_captured(is_captured)
+mesos_state_t::mesos_state_t(bool is_captured, bool verbose) :
+	m_is_captured(is_captured), m_verbose(verbose)
 {
 }
 
-mesos_framework::task_ptr_t mesos_state_t::get_task(const std::string& uid)
+mesos_framework::task_ptr_t mesos_state_t::get_task(const std::string& uid) const
 {
 	for(auto& framework : get_frameworks())
 	{
@@ -77,6 +78,32 @@ marathon_app::ptr_t mesos_state_t::get_app(const std::string& app_id)
 	{
 		g_logger.log("Found group for app [" + app_id + "]: " + group->get_id(), sinsp_logger::SEV_DEBUG);
 		return group->get_app(app_id);
+	}
+	return 0;
+}
+
+marathon_app::ptr_t mesos_state_t::get_app(mesos_task::ptr_t task) const
+{
+	for(const auto& group : m_groups)
+	{
+		marathon_app::ptr_t app = group.second->get_app(task);
+		if(app)
+		{
+			return app;
+		}
+	}
+	return 0;
+}
+
+marathon_group::ptr_t mesos_state_t::get_group(mesos_task::ptr_t task) const
+{
+	for(const auto& group : m_groups)
+	{
+		marathon_group::ptr_t grp = group.second->get_group(task);
+		if(grp)
+		{
+			return grp;
+		}
 	}
 	return 0;
 }
@@ -258,7 +285,7 @@ void mesos_state_t::capture_groups(const Json::Value& root, const std::string& f
 	}
 }
 
-bool mesos_state_t::parse_groups(const Json::Value& root, const std::string& framework_id)
+bool mesos_state_t::parse_groups(Json::Value&& root, const std::string& framework_id)
 {
 	add_group(root, 0, framework_id);
 	if(m_is_captured)
@@ -266,6 +293,10 @@ bool mesos_state_t::parse_groups(const Json::Value& root, const std::string& fra
 		Json::Value capt;
 		capture_groups(root, framework_id, capt, true);
 		enqueue_capture_event(capture::MARATHON_GROUPS, Json::FastWriter().write(capt));
+	}
+	if(m_verbose)
+	{
+		std::cout << Json::FastWriter().write(root) << std::endl;
 	}
 	return true;
 }
@@ -276,7 +307,7 @@ bool mesos_state_t::parse_groups(std::string&& json, const std::string& framewor
 	Json::Reader reader;
 	if(reader.parse(json, root, false) && !root["id"].isNull())
 	{
-		return parse_groups(root, framework_id);
+		return parse_groups(std::move(root), framework_id);
 	}
 	else
 	{
@@ -417,7 +448,7 @@ void mesos_state_t::capture_apps(const Json::Value& root, const std::string& fra
 	enqueue_capture_event(capture::MARATHON_APPS, Json::FastWriter().write(capt));
 }
 
-void mesos_state_t::parse_apps(const Json::Value& root, const std::string& framework_id)
+void mesos_state_t::parse_apps(Json::Value&& root, const std::string& framework_id)
 {
 	const Json::Value& apps = root["apps"];
 	if(!apps.isNull())
@@ -429,6 +460,10 @@ void mesos_state_t::parse_apps(const Json::Value& root, const std::string& frame
 		if(m_is_captured)
 		{
 			capture_apps(root, framework_id);
+		}
+		if(m_verbose)
+		{
+			std::cout << Json::FastWriter().write(root) << std::endl;
 		}
 	}
 	else
@@ -443,7 +478,7 @@ void mesos_state_t::parse_apps(std::string&& json, const std::string& framework_
 	Json::Reader reader;
 	if(reader.parse(json, root, false))
 	{
-		parse_apps(root, framework_id);
+		parse_apps(std::move(root), framework_id);
 	}
 	else
 	{
@@ -466,6 +501,11 @@ marathon_app::ptr_t mesos_state_t::add_app(const Json::Value& app, const std::st
 			p_app = add_or_replace_app(id, group_id);
 			if(p_app)
 			{
+				const Json::Value& labels = app["labels"];
+				if(!labels.isNull())
+				{
+					p_app->set_labels(labels);
+				}
 				g_logger.log("Added app [" + id + "] to Marathon group: [" + group_id + ']', sinsp_logger::SEV_DEBUG);
 				const Json::Value& tasks = app["tasks"];
 				if(tasks.size())

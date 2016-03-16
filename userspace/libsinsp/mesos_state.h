@@ -96,7 +96,7 @@ public:
 	void capture_apps(const Json::Value& root, const std::string& framework_id);
 #endif // HAS_CAPTURE
 
-	mesos_state_t(bool is_captured = false);
+	mesos_state_t(bool is_captured = false, bool verbose = false);
 
 	//
 	// frameworks
@@ -116,7 +116,7 @@ public:
 	std::unordered_set<std::string> get_all_task_ids() const;
 	const mesos_framework::task_map& get_tasks(const std::string& framework_uid) const;
 	mesos_framework::task_map& get_tasks(const std::string& framework_uid);
-	mesos_framework::task_ptr_t get_task(const std::string& uid);
+	mesos_framework::task_ptr_t get_task(const std::string& uid) const;
 	void add_or_replace_task(mesos_framework& framework, mesos_task::ptr_t task);
 	void remove_task(mesos_framework& framework, const std::string& uid);
 
@@ -137,7 +137,7 @@ public:
 	//
 	// Marathon apps
 	//
-	void parse_apps(const Json::Value& root, const std::string& framework_id);
+	void parse_apps(Json::Value&& root, const std::string& framework_id);
 	void parse_apps(std::string&& json, const std::string& framework_id);
 	marathon_app::ptr_t get_app(const std::string& app_id);
 	marathon_group::app_ptr_t add_or_replace_app(const std::string& id,
@@ -145,15 +145,17 @@ public:
 												const std::string& task = "");
 	bool remove_app(const std::string& id);
 	void add_task_to_app(marathon_group::app_ptr_t app, const std::string& task_id);
+	marathon_app::ptr_t get_app(mesos_task::ptr_t task) const;
 
 	//
 	// Marathon groups
 	//
-	bool parse_groups(const Json::Value& root, const std::string& framework_id);
+	bool parse_groups(Json::Value&& root, const std::string& framework_id);
 	bool parse_groups(std::string&& json, const std::string& framework_id);
 	const marathon_groups& get_groups() const;
 	marathon_groups& get_groups();
 	marathon_group::ptr_t get_group(const std::string& group_id);
+	marathon_group::ptr_t get_group(mesos_task::ptr_t task) const;
 	marathon_group::ptr_t add_or_replace_group(marathon_group::ptr_t group, marathon_group::ptr_t to_group = 0);
 	marathon_group::ptr_t get_app_group(const std::string& app_id);
 	void erase_groups(const std::string& framework_id);
@@ -176,6 +178,7 @@ private:
 	marathon_groups  m_groups;
 	bool             m_is_captured;
 	capture_list     m_capture;
+	bool             m_verbose;
 
 	std::unordered_multimap<std::string, std::string> m_marathon_task_cache;
 };
