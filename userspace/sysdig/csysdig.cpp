@@ -541,8 +541,6 @@ sysdig_init_res csysdig_init(int argc, char **argv)
 			//
 			// Launch the capture
 			//
-			bool open_success = true;
-
 			if(infiles.size() != 0)
 			{
 				//
@@ -561,6 +559,8 @@ sysdig_init_res csysdig_init(int argc, char **argv)
 				// No file to open, this is a live capture
 				//
 #if defined(HAS_CAPTURE)
+				bool open_success = true;
+				
 				try
 				{
 					inspector->open("");

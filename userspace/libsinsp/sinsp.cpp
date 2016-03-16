@@ -96,6 +96,7 @@ sinsp::sinsp() :
 	m_output_time_flag = 'h';
 	m_max_evt_output_len = 0;
 	m_filesize = -1;
+	m_track_tracers_state = false;
 	m_import_users = true;
 	m_meta_evt_buf = new char[SP_EVT_BUF_SIZE];
 	m_meta_evt.m_pevt = (scap_evt*) m_meta_evt_buf;
@@ -252,6 +253,15 @@ void sinsp::init()
 	m_fds_to_remove->clear();
 	m_n_proc_lookups = 0;
 	m_n_proc_lookups_duration_ns = 0;
+
+	//
+	// Return the tracers to the pool and clear the tracers list
+	//
+	for(auto it = m_partial_tracers_list.begin(); it != m_partial_tracers_list.end(); ++it)
+	{
+		m_partial_tracers_pool->push(*it);
+	}
+	m_partial_tracers_list.clear();
 
 	//
 	// If we're reading from file, we try to pre-parse the container events before
@@ -1039,7 +1049,9 @@ int32_t sinsp::next(OUT sinsp_evt **puevt)
 			}
 		}
 
-		res = scap_dump(m_h, m_dumper, evt->m_pevt, evt->m_cpuid, dflags);
+		scap_evt* pdevt = (evt->m_poriginal_evt)? evt->m_poriginal_evt : evt->m_pevt;
+
+		res = scap_dump(m_h, m_dumper, pdevt, evt->m_cpuid, dflags);
 
 		if(SCAP_SUCCESS != res)
 		{
@@ -1659,7 +1671,7 @@ void sinsp::init_k8s_client(string* api_server, string* ssl_cert, bool verbose)
 
 #ifdef HAS_CAPTURE
 ssl_err:
-	throw sinsp_exception("Invalid K8S SSL entry: " + *ssl_cert);
+	throw sinsp_exception(string("Invalid K8S SSL entry: ") + (ssl_cert ? *ssl_cert : string("NULL")));
 #endif // HAS_CAPTURE
 }
 
