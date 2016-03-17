@@ -101,15 +101,35 @@ sinsp_container_info* sinsp_container_manager::get_container(const string& conta
 	return NULL;
 }
 
-bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container, const string& task_id, int64_t ptid)
+string sinsp_container_manager::get_env_mesos_task_id(int64_t tid)
+{
+	string mtid;
+	sinsp_threadinfo* ptinfo = m_inspector->find_thread(tid, true);
+	if(ptinfo)
+	{
+		mtid = ptinfo->get_env("MESOS_TASK_ID");
+		if(!mtid.empty()) { return mtid; }
+		mtid = ptinfo->get_env("mesos_task_id");
+		if(!mtid.empty()) { return mtid; }
+		mtid = ptinfo->get_env("MESOS_EXECUTOR_ID");
+		if(!mtid.empty()) { return mtid; }
+		if(ptinfo->m_ptid > 1)
+		{
+			mtid = get_env_mesos_task_id(ptinfo->m_ptid);
+		}
+	}
+	return mtid;
+}
+
+bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container, sinsp_threadinfo* tinfo/*, const string& task_id, int64_t ptid*/)
 {
 	ASSERT(container);
-	const string& container_id = container->m_id;
-	if(task_id.empty() && -1 == ptid)
+	//const string& container_id = container->m_id;
+	/*if(task_id.empty() && -1 == ptid)
 	{
 		g_logger.log("Mesos container [" + container_id + "] detection attempted with insufficient information provided.", sinsp_logger::SEV_WARNING);
 		return false;
-	}
+	}*/
 
 	// there are applications that do not share their environment in /proc/[PID]/environ
 	// since we need MESOS_TASK_ID environment variable to discover Mesos containers,
@@ -119,10 +139,19 @@ bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container,
 	// - for mesos native containers, parent process has the MESOS_TASK_ID env variable,
 	//   so we peek into the parent process environment to discover it
 
-	if(container)
+	if(container && tinfo)
 	{
-		if(container->m_mesos_task_id.empty())
+		string& mtid = container->m_mesos_task_id;
+		if(mtid.empty())
 		{
+			mtid = get_env_mesos_task_id(tinfo->m_tid);
+			if(!mtid.empty())
+			{
+				g_logger.log("Mesos native container: [" + container->m_id + "], Mesos task ID: " + mtid, sinsp_logger::SEV_DEBUG);
+				//container->m_mesos_task_id = mtid;
+				return true;
+			}
+/*
 			if(!task_id.empty())
 			{
 				container->m_mesos_task_id = task_id;
@@ -131,17 +160,17 @@ bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container,
 			}
 			else if(-1 != ptid && container->m_type == CT_MESOS)
 			{
-				sinsp_threadinfo* tinfo = m_inspector->find_thread(ptid, true);
-				if(tinfo)
+				sinsp_threadinfo* ptinfo = m_inspector->find_thread(ptid, true);
+				if(ptinfo)
 				{
-					string mtid = tinfo->get_env("MESOS_TASK_ID");
+					string mtid = ptinfo->get_env("MESOS_TASK_ID");
 					if(mtid.empty())
 					{
-						mtid = tinfo->get_env("mesos_task_id");
+						mtid = ptinfo->get_env("mesos_task_id");
 					}
 					if(mtid.empty())
 					{
-						mtid = tinfo->get_env("MESOS_EXECUTOR_ID");
+						mtid = ptinfo->get_env("MESOS_EXECUTOR_ID");
 					}
 					if(!mtid.empty())
 					{
@@ -150,7 +179,7 @@ bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container,
 						return true;
 					}
 				}
-			}
+			}*/
 		}
 	}
 
@@ -274,13 +303,13 @@ bool sinsp_container_manager::resolve_container(sinsp_threadinfo* tinfo, bool qu
 		//
 		// Mesos
 		//
-		pos = cgroup.find("/mesos/");
+		pos = cgroup.find("/mesos/");	
 		if(pos != string::npos)
 		{
 			container_info.m_type = CT_MESOS;
 			container_info.m_id = cgroup.substr(pos + sizeof("/mesos/") - 1);
 			valid_id = true;
-			string mesos_task_id = tinfo->get_env("MESOS_TASK_ID");
+			/*string mesos_task_id = tinfo->get_env("MESOS_TASK_ID");
 			if(mesos_task_id.empty())
 			{
 				mesos_task_id = tinfo->get_env("mesos_task_id");
@@ -291,9 +320,9 @@ bool sinsp_container_manager::resolve_container(sinsp_threadinfo* tinfo, bool qu
 			}
 			int64_t ptid = tinfo->m_ptid;
 			if(!mesos_task_id.empty() || (-1 != ptid))
-			{
-				set_mesos_task_id(&container_info, mesos_task_id, ptid);
-			}
+			{*/
+			set_mesos_task_id(&container_info, tinfo/*mesos_task_id, ptid*/);
+			//}
 			break;
 		}
 	}

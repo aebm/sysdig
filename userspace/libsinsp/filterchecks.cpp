@@ -2875,7 +2875,7 @@ uint8_t* sinsp_filter_check_event::extract(sinsp_evt *evt, OUT uint32_t* len)
 
 						m_strstorage += to_string(lat / 1000000000);
 						m_strstorage += ".";
-						snprintf(timebuffer, sizeof(timebuffer), "%09llu", lat % 1000000000);
+						snprintf(timebuffer, sizeof(timebuffer), "%09lu", lat % 1000000000);
 						m_strstorage += string(timebuffer);
 					}
 					else
@@ -6037,6 +6037,8 @@ mesos_task::ptr_t sinsp_filter_check_mesos::find_task_for_thread(const sinsp_thr
 	{
 		return NULL;
 	}
+
+	const std::vector<std::string>& env_vars = tinfo->get_env();
 	sinsp_container_info container_info;
 	bool found = m_inspector->m_container_manager.get_container(tinfo->m_container_id, &container_info);
 	if(!found || container_info.m_mesos_task_id.empty())

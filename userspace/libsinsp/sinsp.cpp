@@ -1715,6 +1715,7 @@ bool sinsp::get_mesos_data()
 		time_t now; time(&now);
 		if(last_mesos_refresh)
 		{
+			g_logger.log("Collecting Mesos data ...", sinsp_logger::SEV_DEBUG);
 			ret = m_mesos_client->collect_data();
 		}
 		if(difftime(now, last_mesos_refresh) > 10)
