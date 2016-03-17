@@ -70,6 +70,7 @@ sinsp_filter_check_list::sinsp_filter_check_list()
 	add_filter_check(new sinsp_filter_check_k8s());
 	add_filter_check(new sinsp_filter_check_mesos());
 	add_filter_check(new sinsp_filter_check_tracer());
+	add_filter_check(new sinsp_filter_check_evtin_tracer());
 }
 
 sinsp_filter_check_list::~sinsp_filter_check_list()
