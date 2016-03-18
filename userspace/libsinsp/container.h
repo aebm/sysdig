@@ -72,7 +72,7 @@ public:
 	void dump_containers(scap_dumper_t* dumper);
 	string get_container_name(sinsp_threadinfo* tinfo);
 	string get_env_mesos_task_id(int64_t tid);
-	bool set_mesos_task_id(sinsp_container_info* container, sinsp_threadinfo* tinfo/*const string& task_id, int64_t ptid = -1*/);
+	bool set_mesos_task_id(sinsp_container_info* container, sinsp_threadinfo* tinfo);
 	string get_mesos_task_id(const string& container_id);
 
 private:
