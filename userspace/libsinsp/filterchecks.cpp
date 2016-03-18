@@ -3693,7 +3693,6 @@ bool sinsp_filter_check_event::compare(sinsp_evt *evt)
 		res = sinsp_filter_check::compare(evt);
 	}
 
-fcec_end:
 	m_is_compare = false;
 
 	return res;
@@ -6114,7 +6113,7 @@ const mesos_framework* sinsp_filter_check_mesos::find_framework_by_task(mesos_ta
 	const mesos_state_t& mesos_state = m_inspector->m_mesos_client->get_state();
 	for(const auto& framework : mesos_state.get_frameworks())
 	{
-		if(framework.has_task(task->get_name()))
+		if(framework.has_task(task->get_uid()))
 		{
 			return &framework;
 		}
