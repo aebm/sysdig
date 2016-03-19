@@ -981,9 +981,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 			case 'p':
 				if(string(optarg) == "p")
 				{
-					//
 					// -pp shows the default output format, useful if the user wants to tweak it.
-					//
 					printf("%s\n", output_format.c_str());
 					delete inspector;
 					return sysdig_init_res(EXIT_SUCCESS);
@@ -992,9 +990,7 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 				{
 					output_format = "*%evt.num %evt.outputtime %evt.cpu %container.name (%container.id) %proc.name (%thread.tid:%thread.vtid) %evt.dir %evt.type %evt.info";
 
-					//
 					// This enables chisels to determine if they should print container information
-					//
 					if(inspector != NULL)
 					{
 						inspector->set_print_container_data(true);
@@ -1004,9 +1000,17 @@ sysdig_init_res sysdig_init(int argc, char **argv)
 				{
 					output_format = "*%evt.num %evt.outputtime %evt.cpu %k8s.pod.name (%container.id) %proc.name (%thread.tid:%thread.vtid) %evt.dir %evt.type %evt.info";
 
-					//
 					// This enables chisels to determine if they should print container information
-					//
+					if(inspector != NULL)
+					{
+						inspector->set_print_container_data(true);
+					}
+				}
+				else if(string(optarg) == "m" || string(optarg) == "mesos")
+				{
+					output_format = "*%evt.num %evt.outputtime %evt.cpu %mesos.task.id (%container.id) %proc.name (%thread.tid:%thread.vtid) %evt.dir %evt.type %evt.info";
+
+					// This enables chisels to determine if they should print container information
 					if(inspector != NULL)
 					{
 						inspector->set_print_container_data(true);

@@ -680,14 +680,14 @@ sysdig_init_res csysdig_init(int argc, char **argv)
 	catch(sinsp_capture_interrupt_exception&)
 	{
 	}
-	catch(sinsp_exception& e)
+	catch(std::exception& e)
 	{
 		errorstr = e.what();
 		res.m_res = EXIT_FAILURE;
 	}
 	catch(...)
 	{
-		errorstr = "uncatched exception";
+		errorstr = "uncaught exception";
 		res.m_res = EXIT_FAILURE;
 	}
 
