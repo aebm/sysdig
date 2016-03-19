@@ -4482,7 +4482,7 @@ inline bool sinsp_filter_check_evtin_tracer::compare_tracer(sinsp_evt *evt, sins
 		//
 		// If this is a *.t.* field, reject anything that doesn't come from the same thread
 		//
-		if(pae->m_tid != evt->get_thread_info()->m_tid)
+		if(static_cast<int64_t>(pae->m_tid) != evt->get_thread_info()->m_tid)
 		{
 			return false;
 		}
