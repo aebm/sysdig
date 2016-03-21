@@ -146,8 +146,11 @@ bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container,
 				return true;
 			}
 		}
+		else
+		{
+			return true;
+		}
 	}
-
 	return false;
 }
 

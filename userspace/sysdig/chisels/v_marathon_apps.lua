@@ -82,14 +82,8 @@ view_info =
 		{
 			name = "ID",
 			field = "marathon.app.id",
-			description = "Task name.",
-			colsize = 38
-		},
-		{
-			name = "NAME",
-			field = "marathon.app.name",
 			description = "App name.",
-			colsize = 25
+			colsize = 38
 		},
 		{
 			name = "LABELS",

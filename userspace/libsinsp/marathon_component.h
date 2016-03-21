@@ -20,6 +20,8 @@
 typedef std::pair<std::string, std::string> marathon_pair_t;
 typedef std::vector<marathon_pair_t>        marathon_pair_list;
 
+class marathon_app;
+
 // 
 // component
 //
@@ -61,12 +63,19 @@ public:
 
 	static type get_type(const std::string& name);
 
+protected:
+	typedef std::shared_ptr<marathon_app> app_ptr_t;
+	typedef std::map<std::string, app_ptr_t> task_app_map_t;
+	static void cache_task_app(const std::string& task_id, app_ptr_t app);
+	static void uncache_task_app(const std::string& task_id);
+	static app_ptr_t get_cached_app(const std::string& task_id);
+
 private:
 	type        m_type;
 	std::string m_id;
-};
 
-class marathon_app;
+	static task_app_map_t m_task_app_cache;
+};
 
 //
 // group
@@ -106,7 +115,6 @@ public:
 	void set_framework_id(const std::string& id);
 
 private:
-
 	template <typename M, typename P>
 	static void add_or_replace_component(M& component_map, P comp)
 	{
@@ -119,20 +127,20 @@ private:
 
 	ptr_t get_parent(const std::string& id);
 
-	app_map_t   m_apps;
-	group_map_t m_groups;
-	std::string m_framework_id;
+	app_map_t      m_apps;
+	group_map_t    m_groups;
+	std::string    m_framework_id;
 };
 
 //
 // app
 //
 
-class marathon_app : public marathon_component
+class marathon_app : public marathon_component, public std::enable_shared_from_this<marathon_app>
 {
 public:
-	typedef std::shared_ptr<marathon_app>      ptr_t;
-	typedef std::vector<std::string>           task_list_t;
+	typedef std::shared_ptr<marathon_app> ptr_t;
+	typedef std::vector<std::string>      task_list_t;
 
 	marathon_app(const std::string& uid);
 	~marathon_app();
@@ -148,8 +156,6 @@ public:
 	void set_labels(const Json::Value& labels);
 	const mesos_pair_list& get_labels() const;
 	mesos_pair_t get_label(const std::string& key) const;
-
-	void clear_cache();
 
 private:
 	task_list_t     m_tasks;

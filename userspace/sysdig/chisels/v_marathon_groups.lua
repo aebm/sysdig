@@ -84,12 +84,6 @@ view_info =
 			field = "marathon.group.id",
 			description = "Group id.",
 			colsize = 38
-		},
-		{
-			name = "NAME",
-			field = "marathon.group.name",
-			description = "Group name.",
-			colsize = 25
 		}
 	}
 }

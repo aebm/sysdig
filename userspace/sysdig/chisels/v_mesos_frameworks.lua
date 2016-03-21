@@ -82,7 +82,7 @@ view_info =
 		{
 			name = "ID",
 			field = "mesos.framework.id",
-			description = "Framework id.",
+			description = "Framework ID.",
 			colsize = 38
 		},
 		{
