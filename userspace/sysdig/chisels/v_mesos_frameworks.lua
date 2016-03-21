@@ -32,7 +32,7 @@ view_info =
 			name = "NA",
 			field = "thread.tid",
 			is_key = true
-		}--[[,
+		},
 		{
 			name = "CPU",
 			field = "thread.cpu",
@@ -41,7 +41,7 @@ view_info =
 			aggregation = "AVG",
 			groupby_aggregation = "SUM",
 			is_sorting = true
-		}]]--,
+		},
 		{
 			name = "VIRT",
 			field = "thread.vmsize.b",
