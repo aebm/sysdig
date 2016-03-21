@@ -490,9 +490,10 @@ void mesos_http::handle_json(std::string::size_type end_pos, bool chunked)
 			m_data_buf = m_data_buf.substr(0, end_pos + 1);
 			if(chunked && !purge_chunked_markers(m_data_buf))
 			{
-				g_logger.log("Invalid Mesos or Marathon JSON data detected.", sinsp_logger::SEV_ERROR);
+				g_logger.log("Invalid Mesos or Marathon JSON data detected (chunked transfer).", sinsp_logger::SEV_ERROR);
 				(m_mesos.*m_callback_func)(std::string(), m_framework_id);
 				m_data_buf.clear();
+				m_content_length = string::npos;
 				return;
 			}
 			if(try_parse(m_data_buf))
@@ -501,9 +502,11 @@ void mesos_http::handle_json(std::string::size_type end_pos, bool chunked)
 			}
 			else
 			{
+				g_logger.log("Invalid Mesos or Marathon JSON data detected (non-chunked transfer).", sinsp_logger::SEV_ERROR);
 				(m_mesos.*m_callback_func)(std::string(), m_framework_id);
 			}
 			m_data_buf.clear();
+			m_content_length = string::npos;
 		}
 	}
 }
@@ -566,7 +569,7 @@ void mesos_http::extract_data(std::string& data)
 	}
 	else if (m_data_buf.length() >= m_content_length)
 	{
-		handle_json(m_content_length - 1, false);
+		handle_json(m_data_buf.length() - 1, false);
 	}
 	return;
 }
