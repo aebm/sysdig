@@ -101,21 +101,23 @@ sinsp_container_info* sinsp_container_manager::get_container(const string& conta
 	return NULL;
 }
 
-string sinsp_container_manager::get_env_mesos_task_id(int64_t tid)
+string sinsp_container_manager::get_env_mesos_task_id(sinsp_threadinfo* tinfo)
 {
 	string mtid;
-	sinsp_threadinfo* ptinfo = m_inspector->find_thread(tid, true);
-	if(ptinfo)
+	if(tinfo)
 	{
-		mtid = ptinfo->get_env("MESOS_TASK_ID");
+		// Mesos task ID detection is not a straightforward task;
+		// this list may have to be extended.
+		mtid = tinfo->get_env("MESOS_TASK_ID"); // Marathon
 		if(!mtid.empty()) { return mtid; }
-		mtid = ptinfo->get_env("mesos_task_id");
+		mtid = tinfo->get_env("mesos_task_id"); // Chronos
 		if(!mtid.empty()) { return mtid; }
-		mtid = ptinfo->get_env("MESOS_EXECUTOR_ID");
+		mtid = tinfo->get_env("MESOS_EXECUTOR_ID"); // others
 		if(!mtid.empty()) { return mtid; }
-		if(ptinfo->m_ptid > 1)
+		sinsp_threadinfo* ptinfo = tinfo->get_parent_thread();
+		if(ptinfo && ptinfo->m_tid > 1)
 		{
-			mtid = get_env_mesos_task_id(ptinfo->m_ptid);
+			mtid = get_env_mesos_task_id(ptinfo);
 		}
 	}
 	return mtid;
@@ -131,24 +133,26 @@ bool sinsp_container_manager::set_mesos_task_id(sinsp_container_info* container,
 	// there is a workaround for such cases:
 	// - for docker containers, we discover it directly from container, through Remote API
 	//   (see sinsp_container_manager::parse_docker() for details)
-	// - for mesos native containers, parent process has the MESOS_TASK_ID env variable,
-	//   so we peek into the parent process environment to discover it
+	// - for mesos native containers, parent process has the MESOS_TASK_ID (or equivalent, see
+	//   get_env_mesos_task_id(sinsp_threadinfo*) implementation) environment variable, so we
+	//   peek into the parent process environment to discover it
 
 	if(container && tinfo)
 	{
 		string& mtid = container->m_mesos_task_id;
 		if(mtid.empty())
 		{
-			mtid = get_env_mesos_task_id(tinfo->m_tid);
+			mtid = get_env_mesos_task_id(tinfo);
 			if(!mtid.empty())
 			{
 				g_logger.log("Mesos native container: [" + container->m_id + "], Mesos task ID: " + mtid, sinsp_logger::SEV_DEBUG);
 				return true;
 			}
-		}
-		else
-		{
-			return true;
+			else
+			{
+				g_logger.log("Mesos task ID not found for Mesos container [" + container->m_id + "],"
+							 "thread [" + std::to_string(tinfo->m_tid) + ']', sinsp_logger::SEV_WARNING);
+			}
 		}
 	}
 	return false;
@@ -162,7 +166,6 @@ string sinsp_container_manager::get_mesos_task_id(const string& container_id)
 	{
 		mesos_task_id = container->m_mesos_task_id;
 	}
-
 	return mesos_task_id;
 }
 
